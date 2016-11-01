@@ -1,0 +1,210 @@
+---
+title: "Case Study 01 - GDP ANALYSIS"
+author: "Paul Widhalm"
+date: "November 1, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## INTRODUCTION
+
+This document takes a look at the GDP for various countries and answers some basic questions about their GDP such as their ranking and quantile participation.
+
+
+
+## DOWNLOAD THE DATA SETS
+
+```{r}
+    #install necessary library if needed
+    install.packages("downloader",repos="http://cran.rstudio.com/")
+    library("downloader")
+     
+    download("https://d396qusza40orc.cloudfront.net/getdata%2Fdata%2FGDP.csv","gdp190.csv")
+    download("https://d396qusza40orc.cloudfront.net/getdata%2Fdata%2FEDSTATS_Country.csv","country.csv")
+    
+```
+
+## READ THE DOWNLOADED FILES INTO TABLES
+```{r}
+    GDP<-read.csv("gdp190.csv")
+    STATS<-read.csv("country.csv")
+```
+
+## SUMMARY INFORMATION ON THE DATA - GDP
+```{r}
+    str(GDP)
+    head(GDP)
+    names(GDP)
+    dim(GDP)
+```
+
+
+## SUMMARY INFORMATION ON THE DATA - STATS
+```{r}
+    str(STATS)
+    head(STATS)
+    names(STATS)
+    dim(STATS)
+```
+
+## START CLEANING UP THE DATA FILES
+## first make sure the necessary libraries are installed
+```{r}
+
+    # install necessary library if needed
+    install.packages("tidyr",repos="http://cran.rstudio.com/")
+    library("tidyr")
+    install.packages("dplyr",repos="http://cran.rstudio.com/")
+    library("dplyr")
+
+```
+
+## CLEAN UP GDP
+```{r}
+    dsGDP<-GDP[c(1,2,5)]
+    names(dsGDP)<-c("country","ranking","GDP")
+    
+    # clear out invalid text segments
+    dsGDP$GDP <- gsub("\\(millions of", "", dsGDP$GDP)
+    dsGDP$GDP <- gsub("US dollars\\)", "", dsGDP$GDP)
+    dsGDP$ranking <- gsub("Gross domestic product 2012", "", dsGDP$ranking)
+    dsGDP$ranking <- gsub("Ranking", "", dsGDP$ranking)
+    # select the non-empty rows
+    dsGDP <- dsGDP[5:331,]
+    dsGDP <- dsGDP[dsGDP$country != "", c(1,2,3)]
+    # reformat the number fields
+    dsGDP$GDP <- gsub(",", "", dsGDP$GDP)
+    dsGDP$GDP <- as.integer(dsGDP$GDP)
+    dsGDP$ranking <- as.integer(dsGDP$ranking)
+    
+    # show the final dataset
+    #dsGDP
+    
+    str(dsGDP)
+    head(dsGDP)
+    summary(dsGDP)
+```
+
+
+## CLEAN UP STATS
+```{r}
+    dsSTATS<-STATS[c(1,2,3)]
+    names(dsSTATS)<-c("country","country_name","income_group")
+    
+    # clear out invalid text segments
+    dsSTATS$country <- gsub("CountryCode", "", dsSTATS$country)
+    dsSTATS$country_name <- gsub("Long Name", "", dsSTATS$country_name)
+    dsSTATS$income_group <- gsub("Income Group", "", dsSTATS$income_group)
+    
+    # select the non-empty rows
+    dsSTATS <- dsSTATS[2:331,]
+    dsSTATS<-subset(dsSTATS, !is.na(income_group))
+    # show the final dataset
+    #dsSTATS
+    
+    str(dsSTATS)
+    head(dsSTATS)
+    summary(dsSTATS)
+```
+
+## MERGE THE STATS AND GDP DATASETS
+```{r}
+    m<-merge(dsSTATS,dsGDP,"country")
+    dim(m)
+
+```
+
+## Question #1:  223 country IDs matched between the two datasets
+
+
+```{r}
+    #arrange the data by GDP and get the 13th country
+   m <- subset(m, !is.na(GDP))
+   dim(m)
+   library("dplyr")
+   m<-arrange(m,GDP)
+   head(m,13)
+  
+```
+
+## Question #2: The 13th country after sorting by GDP is: St. Kitts and Nevis
+
+```{r}
+    #filter for income group High Income OECD
+    OECD <- m[m$income_group=="High income: OECD",c(2,4)]
+    head(OECD)
+    summary(OECD)
+    mean(OECD[["ranking"]])
+    
+    #filter for income group High Income nonOECD
+    NOECD <- m[m$income_group=="High income: nonOECD",c(2,4)]
+    #NOECD
+    summary(NOECD)
+    mean(NOECD[["ranking"]])
+
+```
+
+## Question #3: The average GDP ranking for OECD is: 33  and the average GDP ranking for non-OECD is: 89
+
+```{r}
+
+    #install necessary library if needed
+    install.packages("ggplot2",repos="http://cran.rstudio.com/")
+    library("ggplot2")
+    
+    plotz <- m[1:198,]
+    plotz <- plotz[plotz$income_group != "", c(1,2,3,4,5)]
+
+    ggplot(data=plotz, aes(x=GDP,y=country , color=income_group))+geom_point()
+
+
+```
+
+## Question #4 Analysis of the Plot:  The GDP for the High-Income OECD is has the largest number of countries with a high GDP. Most of the other income groups are all within a very tight margin.
+
+```{r}
+
+    #analysis on the ranks for making quantiles
+    qdata<-plotz
+    qmean<-mean(qdata[["ranking"]])
+    qstd<-sd(qdata[["ranking"]])
+    
+    #calculate the quantiles
+    q1<-qnorm(.2,qmean,qstd)  
+    q2<-qnorm(.4,qmean,qstd)  
+    q3<-qnorm(.6,qmean,qstd)  
+    q4<-qnorm(.8,qmean,qstd)  
+    q5<-qnorm(.99,qmean,qstd)    
+     
+    #extract the quantile data members
+    q1Data<-qdata[qdata$ranking<=q1, c(1,2,3,4,5)]
+    q2Data<-qdata[qdata$ranking<=q2 & qdata$ranking>q1, c(1,2,3,4,5)]
+    q3Data<-qdata[qdata$ranking<=q3 & qdata$ranking>q2, c(1,2,3,4,5)]
+    q4Data<-qdata[qdata$ranking<=q4 & qdata$ranking>q3, c(1,2,3,4,5)]
+    q5Data<-qdata[qdata$ranking<=q5 & qdata$ranking>q4, c(1,2,3,4,5)]
+    
+    #summary of quantile data groups
+    summary(q1Data)
+    summary(q2Data)
+    summary(q3Data)
+    summary(q4Data)
+    summary(q5Data)
+    
+    #make a table of income vs ranking
+    table(q1Data$ranking,q1Data$income_group)
+    
+    
+
+```
+
+
+## Question #5 - How many countries are Lower middle income but among the 38 nations with highest GDP?  The answer is 9.
+
+
+## Conclusion:  The U.S. has, by far, the largest GDP and skews some of the analysis being done.  There is a great many more countries with low GDP and low income.  An interesting observation was the number of countries that have a high GDP but are considered low-middle income.
+
+
+
